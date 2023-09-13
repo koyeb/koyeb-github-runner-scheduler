@@ -162,6 +162,6 @@ func (api API) stopRunner(payload *WebHookPayload) {
 	)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "!!! Error while creating the service. The Koyeb CLI returned the following message:\n---%s\n---\n", output)
+		fmt.Fprintf(os.Stderr, "!!! Error while removing the service. The Koyeb CLI returned the following message:\n---%s\n---\n", output)
 	}
 }
