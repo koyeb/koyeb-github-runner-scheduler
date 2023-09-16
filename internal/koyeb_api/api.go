@@ -2,6 +2,9 @@ package koyeb_api
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"net/http"
 
 	"github.com/koyeb/koyeb-api-client-go/api/v1/koyeb"
 )
@@ -38,29 +41,43 @@ func (api APIClient) GetService(appId string, name string) (string, error) {
 
 // Create or update a Koyeb application, and return the application ID.
 func (api APIClient) UpsertApplication(name string) (string, bool, error) {
-	listResp, _, err := api.client.AppsApi.ListApps(api.ctx).Name(name).Execute()
+	listResp, resp, err := api.client.AppsApi.ListApps(api.ctx).Name(name).Execute()
 	if err != nil {
-		return "", false, err
+		return "", false, errorFromHttpResponse(resp)
 	}
 
-	if len(listResp.GetApps()) == 1 {
-		return listResp.GetApps()[0].GetId(), false, nil
+	// Filtering on name returns all the applications that have the name as a prefix. Filter on the exact name.
+	for _, app := range listResp.GetApps() {
+		if app.GetName() == name {
+			return app.GetId(), false, nil
+		}
 	}
 
 	params := koyeb.NewCreateAppWithDefaults()
 	params.SetName(name)
-	createResp, _, err := api.client.AppsApi.CreateApp(api.ctx).App(*params).Execute()
+	createResp, resp, err := api.client.AppsApi.CreateApp(api.ctx).App(*params).Execute()
 	if err != nil {
-		return "", false, err
+		return "", false, errorFromHttpResponse(resp)
 	}
 	return *createResp.GetApp().Id, true, nil
 }
 
 func (api APIClient) CreateService(createService koyeb.CreateService) (string, error) {
-	res, _, err := api.client.ServicesApi.CreateService(api.ctx).Service(createService).Execute()
+	res, resp, err := api.client.ServicesApi.CreateService(api.ctx).Service(createService).Execute()
 	if err != nil {
-		return "", err
+		return "", errorFromHttpResponse(resp)
 	}
 	return res.Service.GetId(), nil
+}
 
+func errorFromHttpResponse(resp *http.Response) error {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		body = []byte{}
+	}
+	return fmt.Errorf(
+		"---\nHTTP/%s\n\n%s\n---\n",
+		resp.Status,
+		body,
+	)
 }
