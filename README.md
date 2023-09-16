@@ -1,15 +1,15 @@
-# koyeb-github-runner-executor
+# koyeb-github-runner-scheduler
 
-koyeb-github-runner-executor is a golang HTTP server accepting requests from GitHub webhooks, and starting GitHub runners on demand on Koyeb.
+koyeb-github-runner-scheduler is a golang HTTP server accepting requests from GitHub webhooks, and starting GitHub runners on demand on Koyeb.
 
 ## Usage
 
-To start a the GitHub runner executor on Koyeb, follow these steps:
+To start the scheduler on Koyeb, follow these steps:
 
 #### Using the [control panel](https://app.koyeb.com/)
 
 * On the Koyeb control panel, create a new service and select the "GitHub" deployment method
-* Under "Public GitHub repository", enter the URL of this repository: https://github.com/koyeb/koyeb-github-runner-executor
+* Under "Public GitHub repository", enter the URL of this repository: https://github.com/koyeb/koyeb-github-runner-scheduler
 * Select the "Dockerfile" builder
 * Set the following environment variables:
     - **PORT:** 8000. Make sure this value matches the port exposed under the section "Exposing gyour service".
@@ -21,16 +21,18 @@ To start a the GitHub runner executor on Koyeb, follow these steps:
 #### Using the [Koyeb CLI](https://github.com/koyeb/koyeb-cli)
 
 ```bash
-$> koyeb app create github-runner-executor
+$> koyeb app create github-runner-scheduler
 $> koyeb service create \
-    --git https://github.com/koyeb/koyeb-github-runner-executor \
+    --git https://github.com/koyeb/koyeb-github-runner-scheduler \
     --git-builder docker \
     --routes /:8000 \
     --ports 8000:http \
     --env PORT=8000 \
     --env KOYEB_TOKEN=xxx \
     --env GITHUB_TOKEN=xxx \
-    --env API_SECRET=xxx
+    --env API_SECRET=xxx \
+    --app github-runner-scheduler \
+    scheduler
 ```
 
 ### Configuring your GitHub repository
@@ -62,6 +64,7 @@ jobs:
       - name: Test runner
         run: |
           echo Hello from Paris, on a Koyeb nano instance!
+
   koyeb-frankfurt:
     runs-on: koyeb-fra-nano
     steps:

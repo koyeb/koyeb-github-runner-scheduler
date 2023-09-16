@@ -1,12 +1,11 @@
 FROM golang
 
-# Install koyeb-cli
-RUN curl -fsSL https://raw.githubusercontent.com/koyeb/koyeb-cli/master/install.sh | sh
-ENV PATH="$PATH:/root/.koyeb/bin"
-
 WORKDIR /app
 
-COPY . .
-RUN go install ./cmd/executor
+COPY ./go.mod ./go.sum ./
+RUN go mod download
 
-CMD ["/go/bin/executor"]
+COPY . .
+RUN go install ./cmd/scheduler
+
+CMD ["/go/bin/scheduler"]
