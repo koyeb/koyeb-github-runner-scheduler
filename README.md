@@ -23,7 +23,8 @@ To start the scheduler on Koyeb, follow these steps:
 ```bash
 $> koyeb app create github-runner-scheduler
 $> koyeb service create \
-    --git https://github.com/koyeb/koyeb-github-runner-scheduler \
+    --git github.com/koyeb/koyeb-github-runner-scheduler \
+    --git-branch master \
     --git-builder docker \
     --routes /:8000 \
     --ports 8000:http \
