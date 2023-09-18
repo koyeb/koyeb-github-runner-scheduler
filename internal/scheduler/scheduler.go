@@ -10,23 +10,32 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/koyeb/koyeb-api-client-go/api/v1/koyeb"
 	"github.com/koyeb/koyeb-github-runner-scheduler/internal/koyeb_api"
 )
 
 const (
-	AppName = "github-runner"
+	RunnersAppName = "github-runner"
+	RunnersImage   = "koyeb/github-runner"
 )
 
 type API struct {
-	KoyebAPIClient koyeb_api.APIClient
-	APISecret      string
-	GithubToken    string
+	koyebAPIClient koyeb_api.APIClient
+	apiSecret      string
+	githubToken    string
+	runnersTTL     time.Duration
+	cleaner        *Cleaner
 }
 
-func NewAPI(koyebClient koyeb_api.APIClient, githubToken string, apiSecret string) API {
-	return API{koyebClient, apiSecret, githubToken}
+func NewAPI(koyebClient koyeb_api.APIClient, githubToken string, apiSecret string, runnersTTL time.Duration) *API {
+	return &API{
+		koyebAPIClient: koyebClient,
+		apiSecret:      apiSecret,
+		githubToken:    githubToken,
+		runnersTTL:     runnersTTL,
+	}
 }
 
 type WebHookPayload struct {
@@ -44,14 +53,36 @@ type WebHookPayload struct {
 	} `json:"workflow_job"`
 }
 
-func (api API) Run(port int) error {
+func (api *API) Run(port int) error {
+	services, err := api.loadCurrentServices()
+	if err != nil {
+		return err
+	}
+
+	api.cleaner = SetupCleaner(api.koyebAPIClient, services, api.runnersTTL)
+
 	router := http.NewServeMux()
 	router.HandleFunc("/", api.scheduler)
 	fmt.Printf("Start listening on %d\n", port)
 	return http.ListenAndServe(fmt.Sprintf(":%d", port), router)
 }
 
-func (api API) scheduler(w http.ResponseWriter, r *http.Request) {
+// loadCurrentServices lists the services in the "github-runner" Koyeb application.
+func (api *API) loadCurrentServices() ([]string, error) {
+	appId, err := api.koyebAPIClient.GetApp(RunnersAppName)
+	if err != nil {
+		return nil, err
+	}
+	services, err := api.koyebAPIClient.ListServices(appId)
+	if err != nil {
+		return nil, err
+	}
+	return services, err
+
+}
+
+// The endpoint called by GitHub webhooks. Validates the request signature, and handle the action.
+func (api *API) scheduler(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -66,7 +97,7 @@ func (api API) scheduler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		hash := hmac.New(sha256.New, []byte(api.APISecret))
+		hash := hmac.New(sha256.New, []byte(api.apiSecret))
 		hash.Write(body)
 		expectedSignature := "sha256=" + hex.EncodeToString(hash.Sum(nil))
 
@@ -82,22 +113,22 @@ func (api API) scheduler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch payload.Action {
-	case "queued":
-		fmt.Printf(">> Received GitHub Action: %s/%s\n", payload.WorkflowJob.WorkflowName, payload.Action)
-		if err := api.startRunner(&payload); err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			fmt.Fprint(os.Stderr, fmt.Sprintf("%s\n", err))
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	default:
-		fmt.Printf(">> Ignoring GitHub action: %s/%s\n", payload.WorkflowJob.WorkflowName, payload.Action)
-		w.WriteHeader(http.StatusOK)
+	// switch payload.Action {
+	// case "queued":
+	fmt.Printf(">> Received GitHub Action: %s/%s\n", payload.WorkflowJob.WorkflowName, payload.Action)
+	if err := api.handleAction(&payload); err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		fmt.Fprint(os.Stderr, fmt.Sprintf("%s\n", err))
+		return
 	}
+	w.WriteHeader(http.StatusOK)
+	// default:
+	// 	fmt.Printf(">> Ignoring GitHub action: %s/%s\n", payload.WorkflowJob.WorkflowName, payload.Action)
+	// 	w.WriteHeader(http.StatusOK)
+	// }
 }
 
-func (api API) startRunner(payload *WebHookPayload) error {
+func (api *API) handleAction(payload *WebHookPayload) error {
 	var region, instanceType string
 
 	for _, label := range payload.WorkflowJob.Labels {
@@ -114,25 +145,32 @@ func (api API) startRunner(payload *WebHookPayload) error {
 		return nil
 	}
 
-	appId, created, err := api.KoyebAPIClient.UpsertApplication(AppName)
+	appId, created, err := api.koyebAPIClient.UpsertApplication(RunnersAppName)
 	if err != nil {
 		return err
 	}
 	if created {
-		fmt.Printf("Application %s (%s) created\n", AppName, appId)
+		fmt.Printf("Create Koyeb application %s (%s)\n", RunnersAppName, appId)
 	}
 
 	fmt.Printf("Check if there is an existing %s runner on %s\n", instanceType, region)
-	serviceId, err := api.KoyebAPIClient.GetService(appId, fmt.Sprintf("runner-%s-%s", region, instanceType))
+	serviceId, err := api.koyebAPIClient.GetService(appId, fmt.Sprintf("runner-%s-%s", region, instanceType))
 	if err != nil {
 		return err
 	}
 
 	if serviceId != "" {
-		fmt.Printf("A %s runner is already running on %s, ignoring\n", instanceType, region)
+		fmt.Printf("A %s runner exists on %s, update TTL\n", instanceType, region)
+		api.cleaner.Update(serviceId)
 		return nil
 	}
 
+	// If the runner does not exist but the action is not "queued", there is nothing to do
+	if payload.Action != "queued" {
+		return nil
+	}
+
+	// Queued action, start a new runner
 	fmt.Printf("Starting %s runner on %s\n", instanceType, region)
 	createService := koyeb.CreateService{
 		AppId: koyeb.PtrString(appId),
@@ -140,7 +178,7 @@ func (api API) startRunner(payload *WebHookPayload) error {
 			Name: koyeb.PtrString(fmt.Sprintf("runner-%s-%s", region, instanceType)),
 			Type: koyeb.DEPLOYMENTDEFINITIONTYPE_WORKER.Ptr(),
 			Docker: &koyeb.DockerSource{
-				Image: koyeb.PtrString("koyeb/github-runner"),
+				Image: koyeb.PtrString(RunnersImage),
 			},
 			Regions: []string{region},
 			InstanceTypes: []koyeb.DeploymentInstanceType{
@@ -148,7 +186,7 @@ func (api API) startRunner(payload *WebHookPayload) error {
 			},
 			Env: []koyeb.DeploymentEnv{
 				{Key: koyeb.PtrString("REPO_URL"), Value: koyeb.PtrString(fmt.Sprintf("https://github.com/%s", payload.Repository.FullName))},
-				{Key: koyeb.PtrString("GITHUB_TOKEN"), Value: koyeb.PtrString(api.GithubToken)},
+				{Key: koyeb.PtrString("GITHUB_TOKEN"), Value: koyeb.PtrString(api.githubToken)},
 				{Key: koyeb.PtrString("RUNNER_LABELS"), Value: koyeb.PtrString(fmt.Sprintf("koyeb-%s-%s", region, instanceType))},
 			},
 			Scalings: []koyeb.DeploymentScaling{
@@ -156,12 +194,11 @@ func (api API) startRunner(payload *WebHookPayload) error {
 			},
 		},
 	}
-
-	serviceId, err = api.KoyebAPIClient.CreateService(createService)
+	serviceId, err = api.koyebAPIClient.CreateService(createService)
 	if err != nil {
 		return err
 	}
-
+	api.cleaner.Update(serviceId)
 	fmt.Printf("Created service %s\n", serviceId)
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/koyeb/koyeb-github-runner-scheduler/internal/koyeb_api"
 	"github.com/koyeb/koyeb-github-runner-scheduler/internal/scheduler"
@@ -18,7 +19,6 @@ func main() {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Invalid PORT value: %s\n", portStr)
 		}
-
 	}
 
 	koyebToken := os.Getenv("KOYEB_TOKEN")
@@ -39,8 +39,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	runnersTTL := 120 * time.Minute
+	if envTTL := os.Getenv("RUNNERS_TTL"); envTTL != "" {
+		var err error
+
+		intTTL, err := strconv.Atoi(envTTL)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Invalid RUNNERS_TTL value: %s\n", envTTL)
+			os.Exit(1)
+		}
+		runnersTTL = time.Duration(intTTL) * time.Minute
+	}
+
 	koyebClient := koyeb_api.NewAPIClient(koyebToken)
-	scheduler := scheduler.NewAPI(koyebClient, githubToken, apiSecret)
+	scheduler := scheduler.NewAPI(koyebClient, githubToken, apiSecret, runnersTTL)
 	if err := scheduler.Run(port); err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 		os.Exit(1)

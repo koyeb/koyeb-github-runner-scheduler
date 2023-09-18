@@ -26,7 +26,7 @@ func NewAPIClient(token string) APIClient {
 	}
 }
 
-// Return the ID of a service named `name` in the application `appId`, or an empty string if the service does not exist.
+// GetService retrieves the ID of the service named `name` in the application `appId`, or an empty string if the service does not exist.
 func (api APIClient) GetService(appId string, name string) (string, error) {
 	resp, _, err := api.client.ServicesApi.ListServices(api.ctx).AppId(appId).Name(name).Execute()
 	if err != nil {
@@ -39,18 +39,15 @@ func (api APIClient) GetService(appId string, name string) (string, error) {
 	return services[0].GetId(), nil
 }
 
-// Create or update a Koyeb application, and return the application ID.
+// UpsertApplication creates or updates a Koyeb application, and returns the application ID.
 func (api APIClient) UpsertApplication(name string) (string, bool, error) {
-	listResp, resp, err := api.client.AppsApi.ListApps(api.ctx).Name(name).Execute()
+	appId, err := api.GetApp(name)
 	if err != nil {
-		return "", false, errorFromHttpResponse(resp)
+		return "", false, err
 	}
-
-	// Filtering on name returns all the applications that have the name as a prefix. Filter on the exact name.
-	for _, app := range listResp.GetApps() {
-		if app.GetName() == name {
-			return app.GetId(), false, nil
-		}
+	// Application already exists
+	if name != "" {
+		return appId, false, nil
 	}
 
 	params := koyeb.NewCreateAppWithDefaults()
@@ -62,6 +59,7 @@ func (api APIClient) UpsertApplication(name string) (string, bool, error) {
 	return *createResp.GetApp().Id, true, nil
 }
 
+// CreateService performs a Koyeb API call to create a service.
 func (api APIClient) CreateService(createService koyeb.CreateService) (string, error) {
 	res, resp, err := api.client.ServicesApi.CreateService(api.ctx).Service(createService).Execute()
 	if err != nil {
@@ -70,6 +68,49 @@ func (api APIClient) CreateService(createService koyeb.CreateService) (string, e
 	return res.Service.GetId(), nil
 }
 
+// GetApp returns the Koyeb application named `name`, or an empty string if the application does not exist.
+func (api APIClient) GetApp(name string) (string, error) {
+	res, resp, err := api.client.AppsApi.ListApps(api.ctx).Name(name).Execute()
+	if err != nil {
+		return "", errorFromHttpResponse(resp)
+	}
+
+	// Filtering on name returns all the applications that have the name as a prefix. Filter on the exact name.
+	for _, app := range res.GetApps() {
+		if app.GetName() == name {
+			return app.GetId(), nil
+		}
+	}
+	return "", nil
+}
+
+// ListServices returns all the services in the application `appId`.
+func (api APIClient) ListServices(appId string) ([]string, error) {
+	res, resp, err := api.client.ServicesApi.ListServices(api.ctx).AppId(appId).Execute()
+	if err != nil {
+		return nil, errorFromHttpResponse(resp)
+	}
+
+	services := make([]string, 0, len(res.GetServices()))
+	for _, svc := range res.GetServices() {
+		services = append(services, svc.GetId())
+	}
+	return services, nil
+}
+
+// DeleteService performs a Koyeb API call to delete a service. Do not fail if the service does not exist.
+func (api APIClient) DeleteService(serviceId string) (bool, error) {
+	_, resp, err := api.client.ServicesApi.DeleteService(api.ctx, serviceId).Execute()
+	if err != nil {
+		if resp.StatusCode == http.StatusNotFound {
+			return false, nil
+		}
+		return false, errorFromHttpResponse(resp)
+	}
+	return true, nil
+}
+
+// Consume the response body to format a meaningful error message from an error HTTP response.
 func errorFromHttpResponse(resp *http.Response) error {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
