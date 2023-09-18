@@ -162,12 +162,12 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 
 	// If the runner does not exist but the action is not "queued", there is nothing to do
 	if payload.Action != "queued" {
-		fmt.Printf("No %s runner on %s, and the action is not \"queued\", ignoring\n", instanceType, region)
+		fmt.Printf("No %s runner on %s, but the action is not \"queued\", ignoring\n", instanceType, region)
 		return nil
 	}
 
 	// Queued action, start a new runner
-	fmt.Printf("Starting %s runner on %s\n", instanceType, region)
+	fmt.Printf("No %s runner on %s. Starting a new instance\n", instanceType, region)
 	createService := koyeb.CreateService{
 		AppId: koyeb.PtrString(appId),
 		Definition: &koyeb.DeploymentDefinition{
