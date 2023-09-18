@@ -36,7 +36,7 @@ func (cleaner *Cleaner) watch(service string) {
 		cleaner.lock.Unlock()
 
 		if time.Since(lastUsed) >= cleaner.ttl {
-			fmt.Printf("TTL reached for service %s, removing it\n", service)
+			fmt.Printf("TTL reached for service %s, removing...\n", service)
 			removed, err := cleaner.koyebAPIClient.DeleteService(service)
 			if err != nil {
 				fmt.Printf("Oops, failed to delete service %s - keep trying: %s\n", service, err)
@@ -49,6 +49,7 @@ func (cleaner *Cleaner) watch(service string) {
 			cleaner.lock.Lock()
 			delete(cleaner.services, service)
 			cleaner.lock.Unlock()
+			fmt.Printf("Service %s successfully deleted\n", service)
 			return
 		}
 	}

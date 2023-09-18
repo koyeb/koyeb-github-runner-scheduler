@@ -38,6 +38,7 @@ func NewAPI(koyebClient koyeb_api.APIClient, githubToken string, apiSecret strin
 	}
 }
 
+// https://docs.github.com/en/webhooks/webhook-events-and-payloads
 type WebHookPayload struct {
 	// GitHub action ("queued", "completed", ...)
 	Action     string `json:"action"`
@@ -113,19 +114,13 @@ func (api *API) scheduler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// switch payload.Action {
-	// case "queued":
-	fmt.Printf(">> Received GitHub Action: %s/%s\n", payload.WorkflowJob.WorkflowName, payload.Action)
+	fmt.Printf("Received GitHub Action \"%s\" for the workflow: %s (labels: %s)\n", payload.Action, payload.WorkflowJob.WorkflowName, strings.Join(payload.WorkflowJob.Labels, ", "))
 	if err := api.handleAction(&payload); err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		fmt.Fprint(os.Stderr, fmt.Sprintf("%s\n", err))
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	// default:
-	// 	fmt.Printf(">> Ignoring GitHub action: %s/%s\n", payload.WorkflowJob.WorkflowName, payload.Action)
-	// 	w.WriteHeader(http.StatusOK)
-	// }
 }
 
 func (api *API) handleAction(payload *WebHookPayload) error {
@@ -141,7 +136,7 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 	}
 
 	if region == "" || instanceType == "" {
-		fmt.Printf("%s/%s does not have a label targeting this scheduler, ignoring\n", payload.WorkflowJob.WorkflowName, payload.Action)
+		fmt.Printf("The \"%s\" for the workflow %s does target this scheduler, ignoring\n", payload.Action, payload.WorkflowJob.WorkflowName)
 		return nil
 	}
 
@@ -150,17 +145,17 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 		return err
 	}
 	if created {
-		fmt.Printf("Create Koyeb application %s (%s)\n", RunnersAppName, appId)
+		fmt.Printf("Created the Koyeb application %s (id: %s)\n", RunnersAppName, appId)
 	}
 
-	fmt.Printf("Check if there is an existing %s runner on %s\n", instanceType, region)
+	fmt.Printf("Checking if there is an existing %s runner on %s...\n", instanceType, region)
 	serviceId, err := api.koyebAPIClient.GetService(appId, fmt.Sprintf("runner-%s-%s", region, instanceType))
 	if err != nil {
 		return err
 	}
 
 	if serviceId != "" {
-		fmt.Printf("A %s runner exists on %s, update TTL\n", instanceType, region)
+		fmt.Printf("A %s runner exists on %s. Mark the service for removal in %s minutes, unless a new action is received\n", instanceType, region, api.runnersTTL)
 		api.cleaner.Update(serviceId)
 		return nil
 	}
@@ -199,6 +194,6 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 		return err
 	}
 	api.cleaner.Update(serviceId)
-	fmt.Printf("Created service %s\n", serviceId)
+	fmt.Printf("Created the service %s, marked for removal in %s minutes\n", serviceId, api.runnersTTL)
 	return nil
 }
