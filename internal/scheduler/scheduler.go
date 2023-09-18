@@ -155,7 +155,7 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 	}
 
 	if serviceId != "" {
-		fmt.Printf("A %s runner exists on %s. Mark the service for removal in %s minutes, unless a new action is received\n", instanceType, region, api.runnersTTL)
+		fmt.Printf("A %s runner exists on %s. Mark the service for removal in %s, unless a new action is received\n", instanceType, region, api.runnersTTL)
 		api.cleaner.Update(serviceId)
 		return nil
 	}
@@ -194,6 +194,6 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 		return err
 	}
 	api.cleaner.Update(serviceId)
-	fmt.Printf("Created the service %s, marked for removal in %s minutes\n", serviceId, api.runnersTTL)
+	fmt.Printf("Created the service %s, marked for removal in %s\n", serviceId, api.runnersTTL)
 	return nil
 }
