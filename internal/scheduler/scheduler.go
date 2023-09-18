@@ -136,7 +136,7 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 	}
 
 	if region == "" || instanceType == "" {
-		fmt.Printf("The \"%s\" for the workflow %s does target this scheduler, ignoring\n", payload.Action, payload.WorkflowJob.WorkflowName)
+		fmt.Printf("The action \"%s\" for the workflow %s does target this scheduler, ignoring\n", payload.Action, payload.WorkflowJob.WorkflowName)
 		return nil
 	}
 
