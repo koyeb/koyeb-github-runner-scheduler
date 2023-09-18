@@ -162,6 +162,7 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 
 	// If the runner does not exist but the action is not "queued", there is nothing to do
 	if payload.Action != "queued" {
+		fmt.Printf("No %s runner on %s, and the action is not \"queued\", ignoring\n", instanceType, region)
 		return nil
 	}
 
