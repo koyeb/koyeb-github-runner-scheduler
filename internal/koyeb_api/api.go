@@ -46,7 +46,7 @@ func (api APIClient) UpsertApplication(name string) (string, bool, error) {
 		return "", false, err
 	}
 	// Application already exists
-	if name != "" {
+	if appId != "" {
 		return appId, false, nil
 	}
 
