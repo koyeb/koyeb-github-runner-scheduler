@@ -155,7 +155,7 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 	}
 
 	if serviceId != "" {
-		fmt.Printf("A %s runner exists on %s. Mark the service for removal in %s, unless a new action is received\n", instanceType, region, api.runnersTTL)
+		fmt.Printf("A %s runner currently exists on %s. Mark the service for removal in %s, unless a new action is received\n", instanceType, region, api.runnersTTL)
 		api.cleaner.Update(serviceId)
 		return nil
 	}
