@@ -15,11 +15,11 @@ To start the scheduler on Koyeb, follow these steps:
 
 | Variable name | Value |
 |---------------|-------|
-| **PORT** | 8000.*Make sure this value matches the port exposed under the section "Exposing gyour service".*
+| **PORT** | 8000. *Make sure this value matches the port exposed under the section "Exposing gyour service".*
 | **KOYEB_TOKEN** | A token created from [the console](https://app.koyeb.com/user/settings/api) which will be used to create Koyeb instances dynamically. *Prefer using a secret over a plain text environment variable.*
 | **GITHUB_TOKEN** | Your GitHub token that will be used to create runner registration tokens. To generate it, go to [Developer Settings](https://github.com/settings/tokens?type=beta) > [Generate new token](https://github.com/settings/personal-access-tokens/new) and under "Permissions" select "Read & Write" for "Administration". *Prefer using a secret over a plain text value to store your token.*
-| **API_SECRET** | A random secret used to authenticate requests from GitHub webhooks.*Prefer using a secret over a plain text environment variable.*
-| *(optional)* **RUNNERS_TTL** | The number of minutes after which the runner will be deleted if no new jobs are received. Defaults to 2 hours.
+| **API_SECRET** | A random secret used to authenticate requests from GitHub webhooks. *Prefer using a secret over a plain text environment variable.*
+| *(optional)* **RUNNERS_TTL** | The number of minutes after which the runner will be deleted if no new jobs are received. Defaults to **120** (2 hours).
 
 #### Using the [Koyeb CLI](https://github.com/koyeb/koyeb-cli)
 
