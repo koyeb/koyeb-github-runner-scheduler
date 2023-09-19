@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -17,25 +17,25 @@ func main() {
 
 		port, err = strconv.Atoi(portStr)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Invalid PORT value: %s\n", portStr)
+			log.Printf("Invalid PORT value: %s\n", portStr)
 		}
 	}
 
 	koyebToken := os.Getenv("KOYEB_TOKEN")
 	if koyebToken == "" {
-		fmt.Fprintf(os.Stderr, "Missing environment variable KOYEB_TOKEN\n")
+		log.Printf("Missing environment variable KOYEB_TOKEN\n")
 		os.Exit(1)
 	}
 
 	githubToken := os.Getenv("GITHUB_TOKEN")
 	if githubToken == "" {
-		fmt.Fprintf(os.Stderr, "Missing environment variable GITHUB_TOKEN\n")
+		log.Printf("Missing environment variable GITHUB_TOKEN\n")
 		os.Exit(1)
 	}
 
 	apiSecret := os.Getenv("API_SECRET")
 	if apiSecret == "" {
-		fmt.Fprintf(os.Stderr, "Missing environment variable API_SECRET\n")
+		log.Printf("Missing environment variable API_SECRET\n")
 		os.Exit(1)
 	}
 
@@ -45,7 +45,7 @@ func main() {
 
 		intTTL, err := strconv.Atoi(envTTL)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Invalid RUNNERS_TTL value: %s\n", envTTL)
+			log.Printf("Invalid RUNNERS_TTL value: %s\n", envTTL)
 			os.Exit(1)
 		}
 		runnersTTL = time.Duration(intTTL) * time.Minute
@@ -54,7 +54,7 @@ func main() {
 	koyebClient := koyeb_api.NewAPIClient(koyebToken)
 	scheduler := scheduler.NewAPI(koyebClient, githubToken, apiSecret, runnersTTL)
 	if err := scheduler.Run(port); err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
+		log.Printf("%s\n", err)
 		os.Exit(1)
 	}
 }

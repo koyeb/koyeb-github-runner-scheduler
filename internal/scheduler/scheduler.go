@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -64,7 +65,7 @@ func (api *API) Run(port int) error {
 
 	router := http.NewServeMux()
 	router.HandleFunc("/", api.scheduler)
-	fmt.Printf("Start listening on %d\n", port)
+	log.Printf("Start listening on %d\n", port)
 	return http.ListenAndServe(fmt.Sprintf(":%d", port), router)
 }
 
@@ -113,10 +114,10 @@ func (api *API) scheduler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("Received GitHub Action \"%s\" for the workflow: %s (labels: %s)\n", payload.Action, payload.WorkflowJob.WorkflowName, strings.Join(payload.WorkflowJob.Labels, ", "))
+	log.Printf("Received GitHub Action \"%s\" for the workflow: %s (labels: %s)\n", payload.Action, payload.WorkflowJob.WorkflowName, strings.Join(payload.WorkflowJob.Labels, ", "))
 	if err := api.handleAction(&payload); err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		fmt.Fprint(os.Stderr, fmt.Sprintf("%s\n", err))
+		log.Printf(fmt.Sprintf("%s\n", err))
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -135,7 +136,7 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 	}
 
 	if region == "" || instanceType == "" {
-		fmt.Printf("The action \"%s\" for the workflow %s does target this scheduler, ignoring\n", payload.Action, payload.WorkflowJob.WorkflowName)
+		log.Printf("The action \"%s\" for the workflow %s does target this scheduler, ignoring\n", payload.Action, payload.WorkflowJob.WorkflowName)
 		return nil
 	}
 
@@ -144,29 +145,29 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 		return err
 	}
 	if created {
-		fmt.Printf("Created the Koyeb application %s (id: %s)\n", RunnersAppName, appId)
+		log.Printf("Created the Koyeb application %s (id: %s)\n", RunnersAppName, appId)
 	}
 
-	fmt.Printf("Checking if there is an existing %s runner on %s...\n", instanceType, region)
+	log.Printf("Checking if there is an existing %s runner on %s...\n", instanceType, region)
 	serviceId, err := api.koyebAPIClient.GetService(appId, fmt.Sprintf("runner-%s-%s", region, instanceType))
 	if err != nil {
 		return err
 	}
 
 	if serviceId != "" {
-		fmt.Printf("A %s runner currently exists on %s. Mark the service for removal in %s, unless a new action is received\n", instanceType, region, api.runnersTTL)
+		log.Printf("A %s runner currently exists on %s. Mark the service for removal in %s, unless a new action is received\n", instanceType, region, api.runnersTTL)
 		api.cleaner.Update(serviceId)
 		return nil
 	}
 
 	// If the runner does not exist but the action is not "queued", there is nothing to do
 	if payload.Action != "queued" {
-		fmt.Printf("No %s runner on %s, but the action is not \"queued\", ignoring\n", instanceType, region)
+		log.Printf("No %s runner on %s, but the action is not \"queued\", ignoring\n", instanceType, region)
 		return nil
 	}
 
 	// Queued action, start a new runner
-	fmt.Printf("No %s runner on %s. Starting a new instance\n", instanceType, region)
+	log.Printf("No %s runner on %s. Starting a new instance\n", instanceType, region)
 	createService := koyeb.CreateService{
 		AppId: koyeb.PtrString(appId),
 		Definition: &koyeb.DeploymentDefinition{
@@ -194,6 +195,6 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 		return err
 	}
 	api.cleaner.Update(serviceId)
-	fmt.Printf("Created the service %s, marked for removal in %s\n", serviceId, api.runnersTTL)
+	log.Printf("Created the service %s, marked for removal in %s\n", serviceId, api.runnersTTL)
 	return nil
 }

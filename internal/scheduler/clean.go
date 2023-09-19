@@ -1,7 +1,7 @@
 package scheduler
 
 import (
-	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -36,20 +36,20 @@ func (cleaner *Cleaner) watch(service string) {
 		cleaner.lock.Unlock()
 
 		if time.Since(lastUsed) >= cleaner.ttl {
-			fmt.Printf("TTL reached for service %s, removing...\n", service)
+			log.Printf("TTL reached for service %s, removing...\n", service)
 			removed, err := cleaner.koyebAPIClient.DeleteService(service)
 			if err != nil {
-				fmt.Printf("Oops, failed to delete service %s - keep trying: %s\n", service, err)
+				log.Printf("Oops, failed to delete service %s - keep trying: %s\n", service, err)
 				continue
 			}
 			if !removed {
-				fmt.Printf("Service %s was already deleted, skip\n", service)
+				log.Printf("Service %s was already deleted, skip\n", service)
 			}
 
 			cleaner.lock.Lock()
 			delete(cleaner.services, service)
 			cleaner.lock.Unlock()
-			fmt.Printf("Service %s successfully deleted\n", service)
+			log.Printf("Service %s successfully deleted\n", service)
 			return
 		}
 	}
