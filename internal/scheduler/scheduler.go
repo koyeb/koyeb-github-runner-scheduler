@@ -79,7 +79,6 @@ func (api *API) loadCurrentServices() ([]string, error) {
 		return nil, err
 	}
 	return services, err
-
 }
 
 // The endpoint called by GitHub webhooks. Validates the request signature, and handle the action.
