@@ -174,7 +174,8 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 			Name: koyeb.PtrString(fmt.Sprintf("runner-%s-%s", region, instanceType)),
 			Type: koyeb.DEPLOYMENTDEFINITIONTYPE_WORKER.Ptr(),
 			Docker: &koyeb.DockerSource{
-				Image: koyeb.PtrString(RunnersImage),
+				Image:      koyeb.PtrString(RunnersImage),
+				Privileged: koyeb.PtrBool(true),
 			},
 			Regions: []string{region},
 			InstanceTypes: []koyeb.DeploymentInstanceType{
