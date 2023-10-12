@@ -51,8 +51,13 @@ func main() {
 		runnersTTL = time.Duration(intTTL) * time.Minute
 	}
 
+	disableDockerDaemon := false
+	if envDisableDockerDaemon := os.Getenv("DISABLE_DOCKER_DAEMON"); envDisableDockerDaemon != "" {
+		disableDockerDaemon = true
+	}
+
 	koyebClient := koyeb_api.NewAPIClient(koyebToken)
-	scheduler := scheduler.NewAPI(koyebClient, githubToken, apiSecret, runnersTTL)
+	scheduler := scheduler.NewAPI(koyebClient, githubToken, apiSecret, runnersTTL, disableDockerDaemon)
 	if err := scheduler.Run(port); err != nil {
 		log.Printf("%s\n", err)
 		os.Exit(1)

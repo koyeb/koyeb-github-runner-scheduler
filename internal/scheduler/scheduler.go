@@ -23,19 +23,21 @@ const (
 )
 
 type API struct {
-	koyebAPIClient koyeb_api.APIClient
-	apiSecret      string
-	githubToken    string
-	runnersTTL     time.Duration
-	cleaner        *Cleaner
+	koyebAPIClient      koyeb_api.APIClient
+	apiSecret           string
+	githubToken         string
+	runnersTTL          time.Duration
+	disableDockerDaemon bool
+	cleaner             *Cleaner
 }
 
-func NewAPI(koyebClient koyeb_api.APIClient, githubToken string, apiSecret string, runnersTTL time.Duration) *API {
+func NewAPI(koyebClient koyeb_api.APIClient, githubToken string, apiSecret string, runnersTTL time.Duration, disableDockerDaemon bool) *API {
 	return &API{
-		koyebAPIClient: koyebClient,
-		apiSecret:      apiSecret,
-		githubToken:    githubToken,
-		runnersTTL:     runnersTTL,
+		koyebAPIClient:      koyebClient,
+		apiSecret:           apiSecret,
+		githubToken:         githubToken,
+		runnersTTL:          runnersTTL,
+		disableDockerDaemon: disableDockerDaemon,
 	}
 }
 
@@ -185,13 +187,19 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 				{Key: koyeb.PtrString("REPO_URL"), Value: koyeb.PtrString(fmt.Sprintf("https://github.com/%s", payload.Repository.FullName))},
 				{Key: koyeb.PtrString("GITHUB_TOKEN"), Value: koyeb.PtrString(api.githubToken)},
 				{Key: koyeb.PtrString("RUNNER_LABELS"), Value: koyeb.PtrString(fmt.Sprintf("koyeb-%s-%s", region, instanceType))},
-				{Key: koyeb.PtrString("DISABLE_DOCKER_DAEMON"), Value: koyeb.PtrString("true")},
 			},
 			Scalings: []koyeb.DeploymentScaling{
 				{Min: koyeb.PtrInt64(1), Max: koyeb.PtrInt64(1), Scopes: []string{fmt.Sprintf("region:%s", region)}},
 			},
 		},
 	}
+	if api.disableDockerDaemon {
+		createService.Definition.Env = append(
+			createService.Definition.Env,
+			koyeb.DeploymentEnv{Key: koyeb.PtrString("DISABLE_DOCKER_DAEMON"), Value: koyeb.PtrString("true")},
+		)
+	}
+
 	serviceId, err = api.koyebAPIClient.CreateService(createService)
 	if err != nil {
 		return err
