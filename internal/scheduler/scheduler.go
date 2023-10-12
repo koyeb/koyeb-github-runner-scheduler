@@ -185,7 +185,7 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 				{Key: koyeb.PtrString("REPO_URL"), Value: koyeb.PtrString(fmt.Sprintf("https://github.com/%s", payload.Repository.FullName))},
 				{Key: koyeb.PtrString("GITHUB_TOKEN"), Value: koyeb.PtrString(api.githubToken)},
 				{Key: koyeb.PtrString("RUNNER_LABELS"), Value: koyeb.PtrString(fmt.Sprintf("koyeb-%s-%s", region, instanceType))},
-				{Key: koyeb.PtrString("SKIP_DOCKER"), Value: koyeb.PtrString("true")},
+				{Key: koyeb.PtrString("DISABLE_DOCKER_DAEMON"), Value: koyeb.PtrString("true")},
 			},
 			Scalings: []koyeb.DeploymentScaling{
 				{Min: koyeb.PtrInt64(1), Max: koyeb.PtrInt64(1), Scopes: []string{fmt.Sprintf("region:%s", region)}},
