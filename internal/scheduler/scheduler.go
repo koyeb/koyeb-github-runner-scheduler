@@ -22,6 +22,13 @@ const (
 	RunnersImage   = "koyeb/github-runner"
 )
 
+type APIMode int
+
+const (
+	RepositoryMode APIMode = iota
+	OrganizationMode
+)
+
 type API struct {
 	koyebAPIClient      koyeb_api.APIClient
 	apiSecret           string
@@ -29,15 +36,17 @@ type API struct {
 	runnersTTL          time.Duration
 	disableDockerDaemon bool
 	cleaner             *Cleaner
+	mode                APIMode
 }
 
-func NewAPI(koyebClient koyeb_api.APIClient, githubToken string, apiSecret string, runnersTTL time.Duration, disableDockerDaemon bool) *API {
+func NewAPI(koyebClient koyeb_api.APIClient, githubToken string, apiSecret string, runnersTTL time.Duration, disableDockerDaemon bool, mode APIMode) *API {
 	return &API{
 		koyebAPIClient:      koyebClient,
 		apiSecret:           apiSecret,
 		githubToken:         githubToken,
 		runnersTTL:          runnersTTL,
 		disableDockerDaemon: disableDockerDaemon,
+		mode:                mode,
 	}
 }
 
@@ -170,6 +179,15 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 
 	// Queued action, start a new runner
 	log.Printf("No %s runner on %s. Starting a new instance\n", instanceType, region)
+
+	var repoUrl string
+	switch api.mode {
+	case RepositoryMode:
+		repoUrl = fmt.Sprintf("https://github.com/%s", payload.Repository.FullName)
+	case OrganizationMode:
+		repoUrl = fmt.Sprintf("https://github.com/%s", strings.Split(payload.Repository.FullName, "/")[0])
+	}
+
 	createService := koyeb.CreateService{
 		AppId: koyeb.PtrString(appId),
 		Definition: &koyeb.DeploymentDefinition{
@@ -184,7 +202,7 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 				{Type: koyeb.PtrString(instanceType), Scopes: []string{fmt.Sprintf("region:%s", region)}},
 			},
 			Env: []koyeb.DeploymentEnv{
-				{Key: koyeb.PtrString("REPO_URL"), Value: koyeb.PtrString(fmt.Sprintf("https://github.com/%s", payload.Repository.FullName))},
+				{Key: koyeb.PtrString("REPO_URL"), Value: koyeb.PtrString(repoUrl)},
 				{Key: koyeb.PtrString("GITHUB_TOKEN"), Value: koyeb.PtrString(api.githubToken)},
 				{Key: koyeb.PtrString("RUNNER_LABELS"), Value: koyeb.PtrString(fmt.Sprintf("koyeb-%s-%s", region, instanceType))},
 			},

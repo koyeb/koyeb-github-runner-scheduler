@@ -28,16 +28,26 @@ func main() {
 			if viper.GetInt("runners-ttl") == 0 {
 				return fmt.Errorf("RUNNERS_TTL or --runners-ttl must be omitted or a valid integer representing a duration in minutes")
 			}
+			if viper.GetString("mode") != "repository" && viper.GetString("mode") != "organization" {
+				return fmt.Errorf("MODE or --mode must be omitted or set to repository (default) or organization")
+			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			koyebClient := koyeb_api.NewAPIClient(viper.GetString("koyeb-token"))
+
+			apiMode := scheduler.RepositoryMode
+			if viper.GetString("mode") == "organization" {
+				apiMode = scheduler.OrganizationMode
+			}
+
 			scheduler := scheduler.NewAPI(
 				koyebClient,
 				viper.GetString("githu-token"),
 				viper.GetString("api-secret"),
 				time.Duration(viper.GetInt("runners-ttl"))*time.Minute,
 				viper.GetBool("disable-docker-daemon"),
+				apiMode,
 			)
 			return scheduler.Run(viper.GetInt("port"))
 		},
@@ -62,6 +72,10 @@ func main() {
 	rootCmd.Flags().Bool("disable-docker-daemon", false, "Disable Docker daemon")
 	viper.BindPFlag("disable-docker-daemon", rootCmd.Flags().Lookup("disable-docker-daemon"))
 	viper.BindEnv("disable-docker-daemon", "DISABLE_DOCKER_DAEMON")
+
+	rootCmd.Flags().StringP("mode", "m", "repository", "Scheduler mode (repository or organization)")
+	viper.BindPFlag("mode", rootCmd.Flags().Lookup("mode"))
+	viper.BindEnv("mode", "MODE")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Printf("%s\n", err)
