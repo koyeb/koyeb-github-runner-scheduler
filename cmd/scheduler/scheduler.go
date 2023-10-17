@@ -43,7 +43,7 @@ func main() {
 
 			scheduler := scheduler.NewAPI(
 				koyebClient,
-				viper.GetString("githu-token"),
+				viper.GetString("github-token"),
 				viper.GetString("api-secret"),
 				time.Duration(viper.GetInt("runners-ttl"))*time.Minute,
 				viper.GetBool("disable-docker-daemon"),
