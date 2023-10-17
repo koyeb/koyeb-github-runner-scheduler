@@ -212,6 +212,8 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 		},
 	}
 	if api.disableDockerDaemon {
+		// The container doesn't have to be privileged if the Docker daemon is disabled
+		createService.Definition.Docker.Privileged = koyeb.PtrBool(false)
 		createService.Definition.Env = append(
 			createService.Definition.Env,
 			koyeb.DeploymentEnv{Key: koyeb.PtrString("DISABLE_DOCKER_DAEMON"), Value: koyeb.PtrString("true")},
