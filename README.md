@@ -1,55 +1,174 @@
-# koyeb-github-runner-scheduler
+# `koyeb-github-runner-scheduler`
 
-koyeb-github-runner-scheduler is a golang HTTP server accepting requests from GitHub webhooks, and starting GitHub runners on demand on Koyeb.
+**koyeb-github-runner-scheduler** is a golang HTTP server accepting requests from GitHub webhooks to dynamically start GitHub runners on Koyeb.
+
+## Overview
+
+By default, GitHub actions are run by shared runners hosted on GitHub. These runners are free, but due do their shared nature, they can be slower and have limited resources. To overcome these limitations, we've created a GitHub runner that can be deployed on Koyeb. To deploy this runner manually check out [github.com/koyeb/koyeb-github-runner](https://github.com/koyeb/koyeb-github-runner).
+
+`koyeb-github-runner-scheduler` is a companion to the GitHub runner. When a job is received from GitHub, the scheduler starts a new GitHub runner on Koyeb, and registers it to the repository or organization that sent the job. The runner will then execute the job. After a configured amount of time, if no new jobs are received, the scheduler will delete the runner. This way, you only pay for the time your runner is actually running and you don't have to keep a runner running 24/7.
+
+To fully understand how this scheduler works, some concepts need to be explained. If you are already familiar with GitHub runners, you can skip this section and go directly to the [Usage](#usage) section.
+
+### Webhooks
+
+GitHub has a mechanism called [webhooks](https://docs.github.com/en/developers/webhooks-and-events/about-webhooks) that allows you to receive events from GitHub. Webhooks can inform when a new commit is pushed to a repository, when a pull request is created, when a new issue is opened, etc.
+
+This scheduler expect to receive events from the `workflow_job` event, which is triggered when a job is started and needs to be executed by a runner.
+
+### Repository or Organization Runner?
+
+GitHub offers two options to register a runner: for a specific repository or for an entire organization. Runners configured for a specific repository will only run jobs for that repository. Runners configured for an entire organization will run the jobs for all the repositories of that organization.
+
+In any case, you will have to register a webhook (on the repository or on the organization depending on the type of runner you want to configure), and configure the scheduler with a token that has enough permissions to register a runner for that repository or organization.
+
+### Requirements
+
+To use this scheduler, you need:
+
+- A Koyeb account.
+- (Optional) the [Koyeb CLI](https://www.koyeb.com/docs/build-and-deploy/cli/installation) installed and configured. Make sure you have the latest version installed. 
 
 ## Usage
 
 To start the scheduler on Koyeb, follow these steps:
 
-#### Using the [control panel](https://app.koyeb.com/)
+1. [Create a GitHub token](#1-create-a-github-token)
+2. [Create the Koyeb Application and Service](#2-create-the-koyeb-application-and-service)
+3. [Configure the webhook on GitHub](#3-configure-the-webhook-on-github)
+4. [Create a workflow job](#4-create-a-workflow-job)
 
-* On the Koyeb control panel, create a new service and select the "GitHub" deployment method
-* Under "Public GitHub repository", enter the URL of this repository: https://github.com/koyeb/koyeb-github-runner-scheduler
-* Select the "Dockerfile" builder
-* Set the following environment variables:
+### 1. Create a GitHub token
 
-| Variable name | Value |
-|---------------|-------|
-| **PORT** | 8000. *Make sure this value matches the port exposed under the section "Exposing your service".*
-| **KOYEB_TOKEN** | A token created from [the console](https://app.koyeb.com/user/settings/api) which will be used to create Koyeb instances dynamically. *Prefer using a secret over a plain text environment variable.*
-| **GITHUB_TOKEN** | Your GitHub token that will be used to create runner registration tokens. To generate it, go to [Developer Settings](https://github.com/settings/tokens?type=beta) > [Generate new token](https://github.com/settings/personal-access-tokens/new) and under "Permissions" select "Read & Write" for "Administration". *Prefer using a secret over a plain text value to store your token.*
-| **API_SECRET** | A random secret used to authenticate requests from GitHub webhooks. *Prefer using a secret over a plain text environment variable.*
-| *(optional)* **RUNNERS_TTL** | The number of minutes after which the runner will be deleted if no new jobs are received. Defaults to **120** (2 hours).
+#### For a repository
 
-#### Using the [Koyeb CLI](https://github.com/koyeb/koyeb-cli)
+If you want to register a the scheduler for a specific repository, visit the [Developer Settings](https://github.com/settings/tokens?type=beta) of your account settings:
 
-```bash
-$> koyeb app create github-runner-scheduler
+<img src="./docs/developer-settings.png" width="300" />
+
+Under the "Fine-grained tokens" section, click [Generate new token](https://github.com/settings/personal-access-tokens/new):
+
+<img src="./docs/fine-grained-tokens.png" width="300" />
+<img src="./docs/generate-new-token.png" width="500" />
+
+Set the token name and expiration, choose "Only select repositories", and select the repository you wish to configure:
+
+<img src="./docs/token-create.png" width="500" />
+
+In the "Permissions" section, select "Read & Write" access for the "Administration" item:
+
+<img src="./docs/token-set-perms-repository.png" width="500" />
+
+#### For an organization
+
+If you want to register the scheduler for your organization, visit the [Developer Settings](https://github.com/settings/tokens?type=beta) of your account settings:
+
+<img src="./docs/developer-settings.png" width="300" />
+
+Under the "Fine-grained tokens" section, click [Generate new token](https://github.com/settings/personal-access-tokens/new):
+
+<img src="./docs/fine-grained-tokens.png" width="300" />
+<img src="./docs/generate-new-token.png" width="500" />
+
+Set the token name and expiration, and select your organization under "Resource owner", and choose "All repositories" under the access settings:
+
+<img src="./docs/token-create-orga.png" width="500" />
+
+Select your organization and in the "Organization Permissions" section, select "Read & Write" access for "Self-hosted runners":
+
+<img src="./docs/token-set-perms-organization.png" width="500" />
+
+### 2. Create the Koyeb Application and Service
+
+#### With the `koyeb` CLI
+
+First, create a new application:
+
+```sh
+koyeb app create github-runner-scheduler
+```
+
+Then, create a new service:
+
+```sh
 $> koyeb service create \
-    --git github.com/koyeb/koyeb-github-runner-scheduler \
-    --git-branch master \
-    --git-builder docker \
+    --docker koyeb-github-runner-scheduler \
     --routes /:8000 \
     --ports 8000:http \
-    --env PORT=8000 \
     --env KOYEB_TOKEN=xxx \
     --env GITHUB_TOKEN=xxx \
     --env API_SECRET=xxx \
+    --env MODE=<"repository" or "organization"> \
     --app github-runner-scheduler \
     scheduler
 ```
 
-### Configuring your GitHub repository
+Make sure to replace the following values:
 
-Access the "Settings" page of your GitHub repository, and select the "Webhooks" section. Click on "Add webhook" and enter the following information:
+| Variable name | Value |
+|---------------|-------|
+| **GITHUB_TOKEN** | the token you created in the previous step
+| **KOYEB_TOKEN** | a token created on the [Koyeb control panel](https://app.koyeb.com/user/settings/api), which will be used to create Koyeb instances dynamically
+| **API_SECRET** | a random secret used to authenticate requests from GitHub webhooks. You will need to enter the same value when configuring the webhook on GitHub afterwards
+| **MODE** | either `repository` or `organization`, depending on the type of runner you want to configure. The default value is `repository`. To setup a runner for an organization, set this value to `organization` otherwise runners will fail to start.
 
-* Payload URL: the public URL of your Koyeb service, which can be found on the [control panel](https://app.koyeb.com)
-* Content type: select `application/json`
-* Secret: enter the same value as the `API_SECRET` environment variable
-* SSL verification: leave the default "Enable SSL verification" option
-* Which events would you like to trigger this webhook? Select "Let me select individual events", and uncheck all events except "Workflow jobs"
+If you don't need your runners to start a Docker daemon to run your jobs, you can disable it by setting `--env DISABLE_DOCKER_DAEMON=true`. This will reduce the startup time of your runners and reduce the memory usage.
 
-### Create a workflow job
+By default, the scheduler will delete runners after 120 minutes (2 hours) if no new jobs are received. You can change this value by setting `--env RUNNERS_TTL=xxx`, where `xxx` is the number of minutes after which the runners will be deleted.
+
+#### With the control panel
+
+If you prefer using the control panel, follow these steps:
+
+1. Create a new Docker project
+2. Use the image `koyeb/github-runner-scheduler`
+3. Select the "Web Service" service type
+4. Set the following environment variables:
+
+| Variable name | Value |
+|---------------|-------|
+| **GITHUB_TOKEN** | the token you created in the previous step
+| **KOYEB_TOKEN** | a token created on the [Koyeb control panel](https://app.koyeb.com/user/settings/api), which will be used to create Koyeb instances dynamically
+| **API_SECRET** | a random secret used to authenticate requests from GitHub webhooks. You will need to enter the same value when configuring the webhook on GitHub afterwards
+| **MODE** | either `repository` or `organization`, depending on the type of runner you want to configure. The default value is `repository`. To setup a runner for an organization, set this value to `organization` otherwise runners will fail to start.
+
+If you don't need to start a Docker daemon to run your jobs, you can disable it by setting a `DISABLE_DOCKER_DAEMON` environment variable to `true`.
+
+By default, the scheduler will delete the runner after 120 minutes (2 hours) if no new jobs are received. You can change this value by setting the environment variable `RUNNERS_TTL` to the number of minutes after which the runners will be deleted.
+
+### 3. Configure the webhook on GitHub
+
+#### For a repository
+
+If you want to register the scheduler for a specific repository, go to the settings of your repository, select the "Webhooks" and click on "Add webhoook":
+
+<img src="./docs/webhooks-menu-repository.png" width="700" />
+
+#### For an organization
+
+If you want to register the scheduler for your organization, go to the settings of your organization, select the "Webhooks" and click on "Add webhoook":
+
+<img src="./docs/webhooks-menu-organization.png" width="700" />
+
+#### Configure the webhook
+
+Whatever the type of runner you want to configure (for a repository or for an organization), the configuration of the webhook is the same.
+
+On the top of the page, enter the following information:
+
+* **Payload URL**: the public URL of your Koyeb service, which can be found on the [control panel](https://app.koyeb.com)
+* **Content type**: select `application/json`
+* **Secret**: enter the same value as the `API_SECRET` environment variable previously set
+
+Then, under "Which events would you like to trigger this webhook?", select "Let me select individual events", and uncheck all events except "Workflow jobs":
+
+<img src="./docs/webhooks-init.png" width="500" />
+<img src="./docs/webhooks-disable-pushes.png" width="500" />
+<img src="./docs/webhooks-enable-workflow-jobs.png" width="500" />
+
+Click on "Add webhook" to save the webhook. Your scheduler is not ready to receive repository events from GitHub.
+
+### 4. Create a workflow job
 
 On your GitHub repository, create a new workflow file under the `.github/workflows` directory. For example, `.github/workflows/runner.yml`:
 
@@ -63,16 +182,26 @@ on:
 
 jobs:
   koyeb-paris:
-    runs-on: koyeb-par-nano
+    runs-on: koyeb-par-medium
     steps:
       - name: Test runner
         run: |
           echo Hello from Paris, on a Koyeb nano instance!
 
   koyeb-frankfurt:
-    runs-on: koyeb-fra-nano
+    runs-on: koyeb-fra-small
     steps:
       - name: Test runner
         run: |
           echo Hello from Frankfurt, on a Koyeb nano instance!
 ```
+
+In this example, we have two jobs.
+
+The first job `runs-on` is set to `koyeb-par-medium`. This means that GitHub will look for a runner with the label `koyeb-par-medium` to execute this job. The scheduler will create a new medium runner in Paris with this label, and register it to the repository or organization. The runner will then execute the job.
+
+The second job is similar, except that it will run on a small runner in Frankfurt.
+
+## 🙋‍♂️ Contributing
+
+We are actively working on this project, so if you have feedback (whether this project is working for you or not), we would **love** to hear from you on our [Slack channel](https://slack.koyeb.com/).
