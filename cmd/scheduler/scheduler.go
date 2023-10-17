@@ -61,6 +61,10 @@ func main() {
 	viper.BindPFlag("koyeb-token", rootCmd.Flags().Lookup("koyeb-token"))
 	viper.BindEnv("koyeb-token", "KOYEB_TOKEN")
 
+	rootCmd.Flags().String("github-token", "", "GitHub API token")
+	viper.BindPFlag("github-token", rootCmd.Flags().Lookup("github-token"))
+	viper.BindEnv("github-token", "GITHUB_TOKEN")
+
 	rootCmd.Flags().String("api-secret", "", "API secret")
 	viper.BindPFlag("api-secret", rootCmd.Flags().Lookup("api-secret"))
 	viper.BindEnv("api-secret", "API_SECRET")
