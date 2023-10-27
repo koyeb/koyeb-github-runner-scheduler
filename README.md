@@ -92,7 +92,7 @@ Then, create a new service:
 
 ```sh
 koyeb service create \
-    --docker koyeb-github-runner-scheduler \
+    --docker koyeb/github-runner-scheduler \
     --routes /:8000 \
     --ports 8000:http \
     --env KOYEB_TOKEN=xxx \
