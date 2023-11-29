@@ -3,6 +3,7 @@ package scheduler
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -112,8 +113,7 @@ func (api *API) scheduler(w http.ResponseWriter, r *http.Request) {
 		hash := hmac.New(sha256.New, []byte(api.apiSecret))
 		hash.Write(body)
 		expectedSignature := "sha256=" + hex.EncodeToString(hash.Sum(nil))
-
-		if signature != expectedSignature {
+		if subtle.ConstantTimeCompare([]byte(signature), []byte(expectedSignature)) != 1 {
 			http.Error(w, "Invalid X-Hub-Signature-256 header. Make sure the environment variable API_SECRET matches your GitHub webhook secret.", http.StatusUnauthorized)
 			return
 		}
