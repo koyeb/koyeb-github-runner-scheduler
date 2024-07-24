@@ -61,7 +61,9 @@ func TestSchedulerAuth(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("DISABLE_AUTH", tc.disableAuthEnv)
 			api := API{
-				apiSecret: tc.apiSecret,
+				params: APIParams{
+					ApiSecret: tc.apiSecret,
+				},
 			}
 			fake := fakeAPI{
 				API:          api,

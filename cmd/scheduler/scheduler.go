@@ -42,12 +42,14 @@ func main() {
 			}
 
 			scheduler := scheduler.NewAPI(
-				koyebClient,
-				viper.GetString("github-token"),
-				viper.GetString("api-secret"),
-				time.Duration(viper.GetInt("runners-ttl"))*time.Minute,
-				viper.GetBool("disable-docker-daemon"),
-				apiMode,
+				scheduler.APIParams{
+					KoyebAPIClient:      koyebClient,
+					GithubToken:         viper.GetString("github-token"),
+					ApiSecret:           viper.GetString("api-secret"),
+					RunnersTTL:          time.Duration(viper.GetInt("runners-ttl")) * time.Minute,
+					DisableDockerDaemon: viper.GetBool("disable-docker-daemon"),
+					Mode:                apiMode,
+				},
 			)
 			return scheduler.Run(viper.GetInt("port"))
 		},

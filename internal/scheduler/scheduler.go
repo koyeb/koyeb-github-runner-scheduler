@@ -30,25 +30,22 @@ const (
 	OrganizationMode
 )
 
-type API struct {
-	koyebAPIClient      koyeb_api.APIClient
-	apiSecret           string
-	githubToken         string
-	runnersTTL          time.Duration
-	disableDockerDaemon bool
-	cleaner             *Cleaner
-	mode                APIMode
+type APIParams struct {
+	KoyebAPIClient      koyeb_api.APIClient
+	ApiSecret           string
+	GithubToken         string
+	RunnersTTL          time.Duration
+	DisableDockerDaemon bool
+	Mode                APIMode
 }
 
-func NewAPI(koyebClient koyeb_api.APIClient, githubToken string, apiSecret string, runnersTTL time.Duration, disableDockerDaemon bool, mode APIMode) *API {
-	return &API{
-		koyebAPIClient:      koyebClient,
-		apiSecret:           apiSecret,
-		githubToken:         githubToken,
-		runnersTTL:          runnersTTL,
-		disableDockerDaemon: disableDockerDaemon,
-		mode:                mode,
-	}
+type API struct {
+	params  APIParams
+	cleaner *Cleaner
+}
+
+func NewAPI(params APIParams) *API {
+	return &API{params: params}
 }
 
 // https://docs.github.com/en/webhooks/webhook-events-and-payloads
@@ -73,7 +70,7 @@ func (api *API) Run(port int) error {
 		return err
 	}
 
-	api.cleaner = SetupCleaner(api.koyebAPIClient, services, api.runnersTTL)
+	api.cleaner = SetupCleaner(api.params.KoyebAPIClient, services, api.params.RunnersTTL)
 
 	router := http.NewServeMux()
 	router.HandleFunc("/", api.scheduler)
@@ -83,11 +80,11 @@ func (api *API) Run(port int) error {
 
 // loadCurrentServices lists the services in the "github-runner" Koyeb application.
 func (api *API) loadCurrentServices() ([]string, error) {
-	appId, err := api.koyebAPIClient.GetApp(RunnersAppName)
+	appId, err := api.params.KoyebAPIClient.GetApp(RunnersAppName)
 	if err != nil {
 		return nil, err
 	}
-	services, err := api.koyebAPIClient.ListServices(appId)
+	services, err := api.params.KoyebAPIClient.ListServices(appId)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +107,7 @@ func (api *API) scheduler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		hash := hmac.New(sha256.New, []byte(api.apiSecret))
+		hash := hmac.New(sha256.New, []byte(api.params.ApiSecret))
 		hash.Write(body)
 		expectedSignature := "sha256=" + hex.EncodeToString(hash.Sum(nil))
 		if subtle.ConstantTimeCompare([]byte(signature), []byte(expectedSignature)) != 1 {
@@ -151,7 +148,7 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 		return nil
 	}
 
-	appId, created, err := api.koyebAPIClient.UpsertApplication(RunnersAppName)
+	appId, created, err := api.params.KoyebAPIClient.UpsertApplication(RunnersAppName)
 	if err != nil {
 		return err
 	}
@@ -160,13 +157,13 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 	}
 
 	log.Printf("Checking if there is an existing %s runner on %s...\n", instanceType, region)
-	serviceId, err := api.koyebAPIClient.GetService(appId, fmt.Sprintf("runner-%s-%s", region, instanceType))
+	serviceId, err := api.params.KoyebAPIClient.GetService(appId, fmt.Sprintf("runner-%s-%s", region, instanceType))
 	if err != nil {
 		return err
 	}
 
 	if serviceId != "" {
-		log.Printf("A %s runner currently exists on %s. Mark the service for removal in %s, unless a new action is received\n", instanceType, region, api.runnersTTL)
+		log.Printf("A %s runner currently exists on %s. Mark the service for removal in %s, unless a new action is received\n", instanceType, region, api.params.RunnersTTL)
 		api.cleaner.Update(serviceId)
 		return nil
 	}
@@ -181,7 +178,7 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 	log.Printf("No %s runner on %s. Starting a new instance\n", instanceType, region)
 
 	var repoUrl string
-	switch api.mode {
+	switch api.params.Mode {
 	case RepositoryMode:
 		repoUrl = fmt.Sprintf("https://github.com/%s", payload.Repository.FullName)
 	case OrganizationMode:
@@ -203,7 +200,7 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 			},
 			Env: []koyeb.DeploymentEnv{
 				{Key: koyeb.PtrString("REPO_URL"), Value: koyeb.PtrString(repoUrl)},
-				{Key: koyeb.PtrString("GITHUB_TOKEN"), Value: koyeb.PtrString(api.githubToken)},
+				{Key: koyeb.PtrString("GITHUB_TOKEN"), Value: koyeb.PtrString(api.params.GithubToken)},
 				{Key: koyeb.PtrString("RUNNER_LABELS"), Value: koyeb.PtrString(fmt.Sprintf("koyeb-%s-%s", region, instanceType))},
 			},
 			Scalings: []koyeb.DeploymentScaling{
@@ -211,7 +208,7 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 			},
 		},
 	}
-	if api.disableDockerDaemon {
+	if api.params.DisableDockerDaemon {
 		// The container doesn't have to be privileged if the Docker daemon is disabled
 		createService.Definition.Docker.Privileged = koyeb.PtrBool(false)
 		createService.Definition.Env = append(
@@ -220,11 +217,11 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 		)
 	}
 
-	serviceId, err = api.koyebAPIClient.CreateService(createService)
+	serviceId, err = api.params.KoyebAPIClient.CreateService(createService)
 	if err != nil {
 		return err
 	}
 	api.cleaner.Update(serviceId)
-	log.Printf("Created the service %s, marked for removal in %s\n", serviceId, api.runnersTTL)
+	log.Printf("Created the service %s, marked for removal in %s\n", serviceId, api.params.RunnersTTL)
 	return nil
 }
