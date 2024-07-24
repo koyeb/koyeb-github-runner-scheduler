@@ -47,9 +47,6 @@ type API struct {
 }
 
 func NewAPI(params APIParams) *API {
-	if params.Prefix == "" {
-		params.Prefix = "koyeb"
-	}
 	return &API{params: params}
 }
 

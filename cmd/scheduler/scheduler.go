@@ -49,7 +49,7 @@ func main() {
 					RunnersTTL:          time.Duration(viper.GetInt("runners-ttl")) * time.Minute,
 					DisableDockerDaemon: viper.GetBool("disable-docker-daemon"),
 					Mode:                apiMode,
-					Prefix:              "koyeb",
+					Prefix:              viper.GetString("prefix"),
 				},
 			)
 			return scheduler.Run(viper.GetInt("port"))
@@ -83,6 +83,10 @@ func main() {
 	rootCmd.Flags().StringP("mode", "m", "repository", "Scheduler mode (repository or organization)")
 	viper.BindPFlag("mode", rootCmd.Flags().Lookup("mode"))
 	viper.BindEnv("mode", "MODE")
+
+	rootCmd.Flags().String("prefix", "koyeb", "Prefix for runner labels")
+	viper.BindPFlag("prefix", rootCmd.Flags().Lookup("prefix"))
+	viper.BindEnv("prefix", "PREFIX")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Printf("%s\n", err)
