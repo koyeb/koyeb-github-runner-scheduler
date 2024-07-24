@@ -49,6 +49,7 @@ func main() {
 					RunnersTTL:          time.Duration(viper.GetInt("runners-ttl")) * time.Minute,
 					DisableDockerDaemon: viper.GetBool("disable-docker-daemon"),
 					Mode:                apiMode,
+					Prefix:              "koyeb",
 				},
 			)
 			return scheduler.Run(viper.GetInt("port"))

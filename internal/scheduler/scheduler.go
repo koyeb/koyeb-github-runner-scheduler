@@ -37,6 +37,8 @@ type APIParams struct {
 	RunnersTTL          time.Duration
 	DisableDockerDaemon bool
 	Mode                APIMode
+	// To start a runner, the label must be composed as "<prefix>-<region>-<instanceType>". By default, the prefix is "koyeb".
+	Prefix string
 }
 
 type API struct {
@@ -45,6 +47,9 @@ type API struct {
 }
 
 func NewAPI(params APIParams) *API {
+	if params.Prefix == "" {
+		params.Prefix = "koyeb"
+	}
 	return &API{params: params}
 }
 
@@ -136,7 +141,7 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 
 	for _, label := range payload.WorkflowJob.Labels {
 		parts := strings.Split(label, "-")
-		if len(parts) == 3 && parts[0] == "koyeb" {
+		if len(parts) == 3 && parts[0] == api.params.Prefix {
 			region = parts[1]
 			instanceType = parts[2]
 			break
@@ -201,7 +206,7 @@ func (api *API) handleAction(payload *WebHookPayload) error {
 			Env: []koyeb.DeploymentEnv{
 				{Key: koyeb.PtrString("REPO_URL"), Value: koyeb.PtrString(repoUrl)},
 				{Key: koyeb.PtrString("GITHUB_TOKEN"), Value: koyeb.PtrString(api.params.GithubToken)},
-				{Key: koyeb.PtrString("RUNNER_LABELS"), Value: koyeb.PtrString(fmt.Sprintf("koyeb-%s-%s", region, instanceType))},
+				{Key: koyeb.PtrString("RUNNER_LABELS"), Value: koyeb.PtrString(fmt.Sprintf("%s-%s-%s", api.params.Prefix, region, instanceType))},
 			},
 			Scalings: []koyeb.DeploymentScaling{
 				{Min: koyeb.PtrInt64(1), Max: koyeb.PtrInt64(1), Scopes: []string{fmt.Sprintf("region:%s", region)}},
