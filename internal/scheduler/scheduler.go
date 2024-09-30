@@ -137,17 +137,17 @@ func (api *API) scheduler(w http.ResponseWriter, r *http.Request) {
 // This regexp matches:
 // koyeb-<region>-<region>, e.g. koyeb-par-nano
 // koyeb-aws-<region>-aws-<instanceType>, e.g. koyeb-aws-us-east-1-aws-nano
-// The first submatch is the region, the second is the instance type.
-var LabelRegexp = regexp.MustCompile("^koyeb-(aws-[a-z]+-[a-z]+-[0-9]+|[a-z]+)-(aws-[a-z]+|[a-z]+)$")
+// The first submatch is the string "koyeb", the second the region, and the third is the instance type.
+var LabelRegexp = regexp.MustCompile("^(koyeb)-(aws-[a-z]+-[a-z]+-[0-9]+|[a-z]+)-(aws-[a-z]+|[a-z]+)$")
 
 func (api *API) handleAction(payload *WebHookPayload) error {
 	var region, instanceType string
 
 	for _, label := range payload.WorkflowJob.Labels {
 		parts := LabelRegexp.FindStringSubmatch(label)
-		if len(parts) == 3 && parts[0] == api.params.Prefix {
-			region = parts[1]
-			instanceType = parts[2]
+		if len(parts) == 4 && parts[1] == api.params.Prefix {
+			region = parts[2]
+			instanceType = parts[3]
 			break
 		}
 	}
