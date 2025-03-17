@@ -1,5 +1,9 @@
 # `koyeb-github-runner-scheduler`
 
+> [!CAUTION]
+> This is a work in progress! Do not run it alongside production workloads.
+> Use a dedicated koyeb organization.
+
 **koyeb-github-runner-scheduler** is a golang HTTP server accepting requests from GitHub webhooks to dynamically start GitHub runners on Koyeb.
 
 ## Overview
